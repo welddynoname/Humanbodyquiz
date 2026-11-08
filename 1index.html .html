@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Human Body Quiz — Multiplayer</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#141d33; --panel2:#1b2945; --line:#2b3a59; --text:#f4f7ff; --muted:#9eacc8; --accent:#8b7cff; --green:#3ddc97; --red:#ff6b7a; }
+    * { box-sizing:border-box } body { margin:0; min-height:100vh; background:radial-gradient(ellipse at top,#1b2850 0,#0b1020 55%); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+    .wrap { width:min(1100px,94vw); margin:34px auto 60px; } header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:22px; }
+    h1 { font-size:clamp(25px,4vw,38px); margin:0; letter-spacing:-.04em } .sub { color:var(--muted); margin:5px 0 0 }
+    .tag { border:1px solid var(--line); border-radius:999px; padding:7px 12px; color:#c9c4ff; font-size:13px; }
+    .grid { display:grid; grid-template-columns: minmax(0,1.55fr) minmax(270px,.8fr); gap:18px; align-items:start; }
+    .panel { background:linear-gradient(160deg,rgba(25,37,65,.96),rgba(16,25,45,.96)); border:1px solid var(--line); border-radius:20px; padding:22px; box-shadow:0 18px 50px #0003; }
+    .panel h2 { margin:0 0 14px; font-size:20px } .muted { color:var(--muted) } label { display:block; color:var(--muted); font-size:13px; margin:12px 0 6px }
+    input { width:100%; padding:13px 14px; border-radius:12px; border:1px solid var(--line); background:#0c1529; color:var(--text); font:inherit; outline:none; }
+    input:focus { border-color:var(--accent) } button { cursor:pointer; border:0; border-radius:12px; padding:12px 16px; font:600 15px system-ui; color:white; background:var(--accent); transition:.15s; }
+    button:hover { filter:brightness(1.12); transform:translateY(-1px) } button:disabled { opacity:.45; cursor:not-allowed; transform:none }
+    button.secondary { background:var(--panel2); border:1px solid var(--line) } button.good { background:#16845d } button.danger { background:#9e3548 }
+    .row { display:flex; gap:9px; flex-wrap:wrap } .row > * { flex:1 } .hidden { display:none!important }
+    .status { min-height:24px; margin:12px 0 0; color:#c7d3ef; font-size:14px } .code { font:700 26px ui-monospace,monospace; letter-spacing:.16em; color:#c5bdff }
+    .question { font-size:clamp(20px,3vw,27px); font-weight:700; line-height:1.25; margin:12px 0 18px }
+    .answers { display:grid; grid-template-columns:1fr 1fr; gap:10px } .answer { text-align:left; min-height:62px; background:#202f50; border:1px solid #35486e; display:flex; align-items:center; gap:10px; }
+    .answer .letter { display:grid; place-items:center; width:30px;height:30px;border-radius:9px;background:#35466b; flex:none } .answer.selected { border-color:#b3aaff; background:#39366a } .answer.correct { border-color:var(--green) } .answer.wrong { border-color:var(--red) }
+    .topline { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap } .progress { height:7px; background:#0a1326; border-radius:99px; overflow:hidden; margin:16px 0 } .progress span { display:block;height:100%;background:linear-gradient(90deg,#7e70ff,#43d6b1);width:0 }
+    .players { display:flex; flex-direction:column; gap:8px; margin-top:12px } .player { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:#0d172b; border:1px solid #263654; }
+    .rank { color:#b9b0ff; font-weight:800; width:25px } .score { color:var(--green); font-weight:700; font-variant-numeric:tabular-nums } .pill { font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:4px 8px }
+    .small { font-size:13px } .host-tools { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px } .host-tools button { flex:1 }
+    footer { color:#71809f; text-align:center; font-size:12px; margin-top:24px }
+    @media(max-width:760px){ .grid{grid-template-columns:1fr} .answers{grid-template-columns:1fr} header{align-items:flex-start; flex-direction:column} .panel{padding:18px} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>Human Body Quiz</h1><p class="sub">A live multiplayer quiz for your class or friends.</p></div>
+    <span class="tag">SUPABASE REALTIME</span>
+  </header>
+
+  <section id="setup" class="grid">
+    <div class="panel">
+      <h2>Create a room</h2>
+      <p class="muted small">You become the host and control when each question changes.</p>
+      <label for="hostName">Your nickname</label><input id="hostName" maxlength="20" placeholder="e.g. Alex">
+      <button id="createBtn" style="width:100%;margin-top:14px">Create room</button>
+      <div style="height:1px;background:var(--line);margin:22px 0"></div>
+      <h2>Join a room</h2>
+      <label for="joinName">Your nickname</label><input id="joinName" maxlength="20" placeholder="e.g. Sam">
+      <label for="roomCode">Room code</label><input id="roomCode" maxlength="6" placeholder="ABC123" style="text-transform:uppercase">
+      <button id="joinBtn" class="secondary" style="width:100%;margin-top:14px">Join room</button>
+      <p id="setupStatus" class="status" role="status"></p>
+    </div>
+    <div class="panel">
+      <h2>How it works</h2>
+      <p class="muted">1. The host creates a room and shares the 6-character code.</p>
+      <p class="muted">2. Players join using the code and a nickname.</p>
+      <p class="muted">3. The host starts the quiz and advances questions.</p>
+      <p class="muted">4. Everyone sees the live leaderboard. Correct answers earn 100 points.</p>
+      <p class="small muted">Each player should use a separate browser/device. Rejoining with the same browser session restores that player's identity.</p>
+    </div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="topline" style="margin-bottom:14px">
+      <div><span class="muted small">ROOM CODE</span><div class="code" id="roomCodeDisplay">------</div></div>
+      <div class="row" style="flex:0 0 auto"><span class="pill" id="rolePill">PLAYER</span><button id="leaveBtn" class="secondary">Leave</button></div>
+    </div>
+    <div class="grid">
+      <main class="panel">
+        <div class="topline"><h2 id="stageTitle">Waiting room</h2><span class="pill" id="questionCount">0 / 20</span></div>
+        <div class="progress"><span id="progressBar"></span></div>
+        <div id="lobby">
+          <p class="muted">Share this code with the players:</p>
+          <div class="code" id="lobbyCode">------</div>
+          <p class="muted" id="lobbyHint">Waiting for the host to start the quiz…</p>
+        </div>
+        <div id="questionArea" class="hidden">
+          <div class="muted small" id="questionNumber">QUESTION 1</div>
+          <div class="question" id="questionText"></div>
+          <div class="answers" id="answerButtons"></div>
+          <p id="answerStatus" class="status"></p>
+          <div id="hostPanel" class="host-tools hidden">
+            <button id="revealBtn" class="secondary">Show correct answer</button>
+            <button id="nextBtn">Next question →</button>
+          </div>
+          <div id="resultLine" class="status"></div>
+        </div>
+        <div id="finished" class="hidden">
+          <h2>Quiz completed!</h2><p class="muted">Final leaderboard is shown on the right.</p>
+        </div>
+      </main>
+      <aside class="panel">
+        <div class="topline"><h2>Leaderboard</h2><span class="pill" id="playerCount">0 players</span></div>
+        <div id="leaderboard" class="players"><p class="muted small">No players yet.</p></div>
+        <div id="hostWaiting" class="host-tools hidden"><button id="startBtn" class="good">Start quiz</button></div>
+        <p class="small muted" id="sideNote" style="margin-top:16px">Scores update live for everyone.</p>
+      </aside>
+    </div>
+  </section>
+  <footer>Human Body Quiz · Multiplayer rooms powered by Supabase</footer>
+</div>
+
+<script>
+(() => {
+  // 1) Supabase URL и publishable key.
+  const SUPABASE_URL = "https://cxwljzuvjnxpecituxnb.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_jDWkUg5cToPGfyMW4v-W7Q_b_GcoLqa";
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const QUESTIONS = [
+    ["What is the largest organ in the human body?",["Brain","Heart","Skin","Liver"],2],
+    ["How many bones does an adult human usually have?",["106","150","206","300"],2],
+    ["Which part of the body pumps blood around the system?",["Lungs","Heart","Stomach","Kidneys"],1],
+    ["What do humans use to breathe oxygen from the air?",["Lungs","Liver","Kidneys","Brain"],0],
+    ["Which bone protects the brain from damage?",["Rib","Skull","Spine","Femur"],1],
+    ["Which blood vessels carry oxygen-rich blood away from the heart?",["Veins","Arteries","Nerves","Capillaries"],1],
+    ["What is the main job of red blood cells?",["Fight infections","Carry oxygen to tissues","Digest food","Help us sleep"],1],
+    ["Which organ filters waste from the blood to make urine?",["Heart","Lungs","Kidneys","Stomach"],2],
+    ["What connects muscles to bones in the human body?",["Tendons","Ligaments","Nerves","Skin"],0],
+    ["Which part of the eye controls how much light enters?",["Lens","Iris","Eyelid","Retina"],1],
+    ["What is the strongest and longest bone in the human body?",["Humerus (arm)","Spine (back)","Femur (thigh)","Skull (head)"],2],
+    ["Which organ helps break down food using strong acids?",["Heart","Lungs","Stomach","Liver"],2],
+    ["What is the tiny unit of life that makes up all parts of the human body?",["Atom","Cell","Organ","Bone"],1],
+    ["Which part of the nervous system is the main “computer” inside the head?",["Spinal cord","Brain","Nerves","Heart"],1],
+    ["What do we call the muscular tube that carries food from the mouth to the stomach?",["Windpipe","Esophagus","Spine","Artery"],1],
+    ["Which part of the body helps you keep your balance?",["Inner ear","Stomach","Nose","Lungs"],0],
+    ["What is the colorful part of the human eye called?",["Pupil","Iris","Cornea","Vision"],1],
+    ["Which blood cells are responsible for fighting germs and infections?",["Red blood cells","White blood cells","Platelets","Plasma cells"],1],
+    ["Which bone is commonly called the kneecap?",["Patella","Elbow","Rib","Jaw"],0],
+    ["Which organ stores extra sugar (glucose) and helps process toxins?",["Liver","Lungs","Heart","Brain"],0]
+  ];
+  const $ = id => document.getElementById(id);
+  let room = null, me = null, isHost = false, channel = null, currentRoomState = null, currentPlayers = [];
+  let answeredQuestion = null, revealed = false;
+
+  function status(msg) { $("setupStatus").textContent = msg; }
+  function safeName(v) { return (v || "").trim().slice(0,20); }
+  function showGame() { $("setup").classList.add("hidden"); $("game").classList.remove("hidden"); }
+  function showSetup() { $("game").classList.add("hidden"); $("setup").classList.remove("hidden"); }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+  async function ensureUser() {
+    let { data: { session } } = await db.auth.getSession();
+    if (!session) {
+      const { error } = await db.auth.signInAnonymously();
+      if (error) throw error;
+    }
+    const { data: { user } } = await db.auth.getUser();
+    return user.id;
+  }
+
+  async function createRoom() {
+    try {
+      const name = safeName($("hostName").value);
+      if (!name) return status("Enter your nickname first.");
+      $("createBtn").disabled = true;
+      const uid = await ensureUser();
+      const { data, error } = await db.rpc("create_quiz_room", { p_nickname: name, p_questions: QUESTIONS.map(([question, options, correct_index]) => ({ question, options, correct_index })) });
+      if (error) throw error;
+      room = data.room_id; me = data.player_id; isHost = true;
+      await enterRoom(data.room_code);
+    } catch (e) { status(e.message || "Could not create room."); }
+    finally { $("createBtn").disabled = false; }
+  }
+
+  async function joinRoom() {
+    try {
+      const name = safeName($("joinName").value), code = $("roomCode").value.trim().toUpperCase();
+      if (!name || code.length !== 6) return status("Enter a nickname and a 6-character room code.");
+      $("joinBtn").disabled = true;
+      await ensureUser();
+      const { data, error } = await db.rpc("join_quiz_room", { p_room_code: code, p_nickname: name });
+      if (error) throw error;
+      room = data.room_id; me = data.player_id; isHost = false;
+      await enterRoom(code);
+    } catch (e) { status(e.message || "Could not join room."); }
+    finally { $("joinBtn").disabled = false; }
+  }
+
+  async function enterRoom(code) {
+    $("roomCodeDisplay").textContent = code; $("lobbyCode").textContent = code;
+    $("rolePill").textContent = isHost ? "HOST" : "PLAYER";
+    $("hostWaiting").classList.toggle("hidden", !isHost);
+    $("hostPanel").classList.toggle("hidden", !isHost);
+    showGame();
+    await refresh();
+    channel = db.channel("room-" + room)
+      .on("postgres_changes", {event:"*", schema:"public", table:"quiz_rooms", filter:"id=eq."+room}, refresh)
+      .on("postgres_changes", {event:"*", schema:"public", table:"quiz_players", filter:"room_id=eq."+room}, refresh)
+      .subscribe();
+  }
+
+  async function refresh() {
+    if (!room) return;
+    const [{data:r,error:re},{data:p,error:pe}] = await Promise.all([
+      db.from("quiz_rooms").select("*").eq("id",room).single(),
+      db.from("quiz_players").select("*").eq("room_id",room).order("score",{ascending:false}).order("joined_at",{ascending:true})
+    ]);
+    if (re) { console.error(re); return; } if (pe) { console.error(pe); return; }
+    currentRoomState = r; currentPlayers = p || [];
+    render();
+  }
+
+  function render() {
+    const r = currentRoomState; if (!r) return;
+    const players = [...currentPlayers].sort((a,b)=>b.score-a.score || new Date(a.joined_at)-new Date(b.joined_at));
+    $("playerCount").textContent = players.length + (players.length === 1 ? " player" : " players");
+    $("leaderboard").innerHTML = players.length ? players.map((p,i)=>`<div class="player"><div style="display:flex;align-items:center;gap:9px;min-width:0"><span class="rank">#${i+1}</span><span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.nickname)}${p.id===me?" (you)":""}${p.is_host?" ★":""}</span></div><span class="score">${p.score} pts</span></div>`).join("") : '<p class="muted small">No players yet.</p>';
+    const total = r.questions.length;
+    $("questionCount").textContent = `${Math.min(r.current_index+1,total)} / ${total}`;
+    $("progressBar").style.width = `${r.status==="finished"?100:(r.current_index/total)*100}%`;
+    $("lobby").classList.toggle("hidden", r.status!=="lobby");
+    $("questionArea").classList.toggle("hidden", r.status!=="playing");
+    $("finished").classList.toggle("hidden", r.status!=="finished");
+    $("hostWaiting").classList.toggle("hidden", !(isHost && r.status==="lobby"));
+    $("hostPanel").classList.toggle("hidden", !isHost || r.status!=="playing");
+    $("stageTitle").textContent = r.status==="lobby"?"Waiting room":r.status==="finished"?"Results":"Live question";
+    if (r.status==="lobby") $("lobbyHint").textContent = isHost ? "Players can join now. Start when everyone is ready." : "Waiting for the host to start the quiz…";
+    if (r.status==="playing") renderQuestion(r);
+    if (r.status==="finished") $("resultLine").textContent = "All questions have been completed.";
+  }
+
+  function renderQuestion(r) {
+    const q = r.questions[r.current_index]; if (!q) return;
+    $("questionNumber").textContent = `QUESTION ${r.current_index+1} OF ${r.questions.length}`;
+    $("questionText").textContent = q.question;
+    const myAnswer = currentPlayers.find(p=>p.id===me)?.last_answer_index;
+    const alreadyAnswered = currentPlayers.find(p=>p.id===me)?.last_answer_question === r.current_index;
+    $("answerButtons").innerHTML = q.options.map((opt,i)=>{
+      const selected = alreadyAnswered && myAnswer===i;
+      const cls = selected ? "answer selected" : "answer";
+      return `<button class="${cls}" data-index="${i}" ${alreadyAnswered || isHost ? "disabled":""}><span class="letter">${"ABCD"[i]}</span><span>${escapeHtml(opt)}</span></button>`;
+    }).join("");
+    $("answerButtons").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>submitAnswer(Number(b.dataset.index))));
+    $("answerStatus").textContent = isHost ? "You are hosting. Players are answering this question." : alreadyAnswered ? "Your answer has been submitted." : "Choose one answer.";
+    $("revealBtn").textContent = r.revealed ? "Answer revealed" : "Show correct answer";
+    $("revealBtn").disabled = r.revealed;
+    $("resultLine").textContent = r.revealed ? `Correct answer: ${"ABCD"[q.correct_index]} — ${q.options[q.correct_index]}` : "";
+    if (r.revealed) {
+      [...$("answerButtons").querySelectorAll("button")].forEach((b,i)=>{ if(i===q.correct_index)b.classList.add("correct"); });
+    }
+    $("nextBtn").textContent = r.current_index===r.questions.length-1 ? "Finish quiz" : "Next question →";
+  }
+
+  async function submitAnswer(index) {
+    try {
+      const {error} = await db.rpc("submit_quiz_answer",{p_room_id:room,p_answer_index:index});
+      if(error) throw error;
+      $("answerStatus").textContent = "Answer submitted!";
+      await refresh();
+    } catch(e) { $("answerStatus").textContent = e.message || "Could not submit answer."; }
+  }
+
+  async function hostAction(fn) {
+    try { const {error}=await db.rpc(fn,{p_room_id:room}); if(error) throw error; await refresh(); }
+    catch(e) { $("resultLine").textContent=e.message || "Action failed."; }
+  }
+
+  $("createBtn").addEventListener("click",createRoom);
+  $("joinBtn").addEventListener("click",joinRoom);
+  $("startBtn").addEventListener("click",()=>hostAction("start_quiz_room"));
+  $("revealBtn").addEventListener("click",()=>hostAction("reveal_quiz_answer"));
+  $("nextBtn").addEventListener("click",()=>hostAction("advance_quiz_question"));
+  $("leaveBtn").addEventListener("click",async()=>{
+    if(channel) await db.removeChannel(channel);
+    room=null;me=null;isHost=false;channel=null;currentRoomState=null;currentPlayers=[];
+    showSetup();status("You left the room. Your previous score remains in that room.");
+  });
+  $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6));
+
+  if (SUPABASE_URL.includes("YOUR_") || SUPABASE_ANON_KEY.includes("YOUR_")) {
+    status("Setup required: add your Supabase URL and anon key in the HTML file.");
+  }
+})();
+</script>
+</body>
+</html>
